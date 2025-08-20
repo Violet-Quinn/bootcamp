@@ -5,7 +5,7 @@ This is a simple one-page website project displaying my name and photo.
 ## Live Site
 
 You can view the live website hosted on Netlify here:  
-[https://your-netlify-subdomain.netlify.app](https://your-netlify-subdomain.netlify.app)
+[https://iridescent-zuccutto-5c4745.netlify.app/](https://iridescent-zuccutto-5c4745.netlify.app/)
 
 ## Project Structure
 
