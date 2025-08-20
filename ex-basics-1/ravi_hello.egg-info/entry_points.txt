@@ -1,0 +1,2 @@
+[console_scripts]
+ravi-hello = ravi_hello.main:main
