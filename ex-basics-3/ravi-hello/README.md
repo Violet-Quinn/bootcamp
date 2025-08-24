@@ -1,13 +1,13 @@
-# ex-basics-2
+# ex-basics-3
 
 ---
 
-## Task (ex-basics-2)
-Installing new packages
-Enhance the application with the following:
-
-1. Install the following modules in your environment from pypi: `rich`.
-2. Enhance your code to use rich to print rich message.
+## Task (ex-basics-3)
+Writing command line application
+1. Install typer
+2. Use it to write a command line application in the module
+3. Now, make the cli app as a part of the pyproject.toml so that it gets installed when we install the package.
+4. Record and show the demo where you install the package and run the command and show it.
 
 ---
 
@@ -18,9 +18,9 @@ Enhance the application with the following:
     uv init --package ravi-hello
     ```
     This will create the directory and the necessary files.
-3. Install `rich`:
+3. Install `rich` and `typer`:
 ```bash
-    uv add rich
+    uv add rich typer
 ```
 4. Write the hello module code(__init__.py):
 ```bash
@@ -71,5 +71,21 @@ Enhance the application with the following:
 ```bash
     uv run ravi-hello
 ```
+8. Record the demo using asciinema
+```bash
+    asciinema rec demo.cast
+    ravi-hello Alex
+    exit
+```
+9. Playing Recording
+    demo.cast location: `bootcamp/ex-basics-3/ravi-hello/demo.cast`
+    You can play the recording using:
+```bash
+    asciinema play demo.cast
+```
+Note: There was some error while uploading the recording:
+    ultraviolet@Altars-MacBook-Air ravi-hello % asciinema upload demo.cast      
+    asciinema: upload failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1020)>
+    asciinema: retry later by running: asciinema upload demo.cast
 
 ---

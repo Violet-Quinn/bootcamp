@@ -3,6 +3,7 @@
 ---
 
 ## Task (ex-basics-1)
+Setup of application
 1. Initialize an application for use with uv (uv init)
 2. Create a virtual environment uv venv and source it.
 3. Start your IDE in this environment
