@@ -1,4 +1,4 @@
-# abstraction-level-0
+# Level 0 – Basic Script (No Abstraction)
 
 ---
 
