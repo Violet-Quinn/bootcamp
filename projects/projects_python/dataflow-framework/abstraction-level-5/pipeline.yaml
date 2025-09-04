@@ -1,0 +1,16 @@
+nodes:
+  snake:
+    type: processors.snake.to_snakecase
+    routes:
+      snake: upper
+  upper:
+    type: processors.upper.upper
+    routes:
+      upper: join
+  join:
+    type: processors.join_pairs.join_pairs
+    routes:
+      joined: count
+  count:
+    type: processors.line_count.line_count
+    routes: {}

@@ -1,0 +1,5 @@
+Hello World
+This is a test input file
+with several lines
+to demonstrate the pipeline processing
+Enjoy!

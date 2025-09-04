@@ -1,0 +1,4 @@
+This is an error message
+Just an info message
+Warning: something might be wrong
+Another regular line
