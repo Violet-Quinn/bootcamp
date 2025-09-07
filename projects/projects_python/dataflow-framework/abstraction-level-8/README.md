@@ -89,4 +89,5 @@ How It Works:
     - The infinite loop recovers from transient errors and keeps running indefinitely.
 
 
-
+Run:
+`python3 main.py --watch-dir watch_dir --trace`
