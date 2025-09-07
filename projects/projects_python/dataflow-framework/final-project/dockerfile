@@ -1,0 +1,18 @@
+# Use official Python slim image
+FROM python:3.13-slim-bookworm
+
+# Set working directory inside container
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire project code inside container
+COPY . .
+
+# Expose port 8000 for the FastAPI dashboard
+EXPOSE 8000
+
+# Default command to run your folder monitor with dashboard
+CMD ["python3", "main.py", "--watch-dir", "watch_dir", "--trace"]

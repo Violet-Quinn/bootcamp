@@ -1,0 +1,6 @@
+Warning: CPU temperature high
+Error: Network timeout
+This is a regular log message
+Error: Disk read failure
+Warning: Memory usage critical
+Info: Backup completed successfully

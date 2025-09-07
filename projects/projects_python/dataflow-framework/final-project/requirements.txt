@@ -1,0 +1,4 @@
+typer
+fastapi
+uvicorn[standard]
+pyyaml
