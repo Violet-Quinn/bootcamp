@@ -30,34 +30,56 @@ Implement both using basic string operations. Choose the behavior based on the s
 ---
 
 ## Solution
-How it works:
-- Reads an input text file specified by `--input`.
-- Builds a static pipeline of processor functions based on the selected `--mode`.
-- Applies all processors sequentially on every input line.
-- Outputs results either to the console (default) or to a specified output file (`--output`).
+How Each File Works
+
+1. main.py
+Role: Entry point, runs the CLI app.
+* This file is minimal.
+* It simply imports the Typer CLI app from cli.py and calls app() if the script is run directly.
+* It does not deal with any reading, writing, or processing.
+* This keeps the project clean by isolating execution start here, separate from logic.
+
+2. cli.py
+Role: Command-line interface handler using Typer, manages user interactions.
+* Defines the Typer app instance.
+* Defines the main command (main) decorated with @app.callback(invoke_without_command=True) to make it the default command.
+* Defines CLI options (--input, --output, --mode), reading mode from environment variables if unspecified.
+* Handles file IO: reading lines from input file, writing processed lines to output or stdout.
+* Converts the mode string to a list (supports multiple modes comma-separated).
+* Build a list of processors for the pipeline from modes by calling build_pipeline from pipeline.py.
+* Applies the processors to each input line by calling apply_processors from core.py.
+* Orchestrates the complete flow but delegates actual computing logic to other modules.
+
+3. core.py
+Role: Implements text-processing logic and processor composition.
+* Defines processor functions that transform lines (e.g., to_uppercase, to_snakecase).
+* Each processor matches the common ProcessorFn signature: (str) -> str.
+* Contains apply_processors, which takes a single line and applies all the processors in the pipeline sequentially.
+* Centralizes all processing logic in one module, so adding or changing processors doesn’t affect CLI or pipeline.
+
+4. pipeline.py
+Role: Builds a list of processors based on modes.
+* Responsible for translating mode names (strings like "uppercase", "snakecase") into actual processor functions defined in core.py.
+* Returns a static pipeline (list) of processors for the given modes in order.
+* Raises an error if an unsupported mode is passed.
+* Encapsulates mode-to-processor mapping so the rest of the system calls this single entry point for pipeline construction.
+
+5. types.py
+Role: Defines type aliases and interfaces.
+* Defines ProcessorFn as a type alias for a function signature (str) -> str.
+* This creates a clear contract all processors must follow.
+* Helps code readability, static analysis, and future extensibility with consistent processor interfaces.
+
 
 ## Usage
-All commands use python -m cli to run the CLI package.
-1. Default usage (uppercase transform):
 ```bash
-    python3 -m cli --input test_input.txt
-```
-2. Specify transformation mode(`snakecase`):
-```bash
-    python3 -m cli --input test_input.txt --mode snakecase
-```
-3. Save results to a file:
-```bash
-    python -m cli --input test_input.txt --output test_output.txt
+    python3 cli.py --input test_input.txt --mode uppercase --mode snakecase
 ```
 
 Environment Variables
 A default processing mode was set using an environment variable.
 Create a .env file with following:
 ```bash
-    MODE=snakecase
+    MODE=snakecase,uppercase
 ```
 Override it with the --mode option
-
-Notes:
-    - Your project folder must contain an `__init__.py` file to be recognized as a package.
