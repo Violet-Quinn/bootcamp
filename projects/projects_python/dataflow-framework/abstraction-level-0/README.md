@@ -30,5 +30,16 @@ How it works:
 
 Run the script from the command line, providing input via file redirection:
 ```bash
-    python your_script.py < input.txt
+    python3 your_script.py < input.txt
 ```
+
+or
+```bash
+    echo -e "hello\nworld" | python3 script.py
+```
+Use -e to handle escape sequences properly.
+
+Why Line by Line?
+    - Memory Efficiency: Processing one line at a time ensures that only a small chunk of data is stored and handled at any moment, which is crucial for very large input files or streams.
+
+    - Immediate Feedback: Data can be acted upon immediately as it arrives, enabling responsive, real-time processing and output.
