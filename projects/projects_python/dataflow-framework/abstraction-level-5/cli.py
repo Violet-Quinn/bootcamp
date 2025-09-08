@@ -1,34 +1,39 @@
 import typer
 from typing import Optional
-from pathlib import Path
+from dotenv import load_dotenv
+from dag_engine import DAGEngine
+from pipeline import load_dag_pipeline
 
 app = typer.Typer()
+load_dotenv()
 
-@app.command()
-def run(
-    input: typer.FileText = typer.Option(..., help="Input file path"),
-    output: Optional[Path] = typer.Option(None, help="Output file path"),
-    config: str = typer.Option("pipeline.yaml", help="Pipeline config YAML file"),
-):
-    """
-    Run the DAG-based processing pipeline on the input file lines using the specified config.
-    Writes output to the given file or prints to stdout if no output file is provided.
-    """
-    from pipeline import Pipeline
+def read_lines(path: str):
+    with open(path) as f:
+        for line in f:
+            yield line.rstrip("\n")
 
-    lines = (line.rstrip("\n") for line in input)
-    pipeline = Pipeline(config)
-
-    results = pipeline.run(lines)
-
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with output.open("w", encoding="utf-8") as f:
-            for line in results:
+def write_output(lines, output_path: Optional[str]) -> None:
+    if output_path:
+        with open(output_path, "w") as f:
+            for line in lines:
                 f.write(line + "\n")
     else:
-        for line in results:
-            print(line)
+        for line in lines:
+            typer.echo(line)
+
+@app.command()
+def main(
+    input_path: str = typer.Option(..., "--input", "-i", help="Input file path"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+    config: str = typer.Option("pipeline.yaml", "--config", "-c", help="DAG pipeline YAML config"),
+    start_node: str = typer.Option(..., "--start-node", "-s", help="Start node name in DAG"),
+):
+    processors, routes = load_dag_pipeline(config)
+    engine = DAGEngine(processors, routes)
+
+    lines = read_lines(input_path)
+    output_lines = engine.run(lines, start_node)
+    write_output(output_lines, output)
 
 if __name__ == "__main__":
     app()

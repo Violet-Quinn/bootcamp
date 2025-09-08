@@ -1,16 +1,31 @@
 nodes:
-  snake:
-    type: processors.snake.to_snakecase
-    routes:
-      snake: upper
-  upper:
-    type: processors.upper.upper
-    routes:
-      upper: join
-  join:
-    type: processors.join_pairs.join_pairs
-    routes:
-      joined: count
-  count:
-    type: processors.line_count.line_count
-    routes: {}
+  - name: joiner
+    processor: processors.join_two_lines.JoinEveryTwoLines
+  - name: tagger
+    processor: processors.tag_error.TagError
+  - name: error_counter
+    processor: processors.line_counter.LineCounter
+  - name: snake_formatter
+    processor: processors.snake.to_snakecase
+  - name: upper_formatter
+    processor: processors.upper.to_uppercase
+
+routes:
+  - from: joiner
+    tag: default
+    to: [tagger]
+  - from: tagger
+    tag: error
+    to: [error_counter]
+  - from: tagger
+    tag: general
+    to: [snake_formatter]
+  - from: snake_formatter
+    tag: default
+    to: [upper_formatter]
+  - from: upper_formatter
+    tag: default
+    to: []
+  - from: error_counter
+    tag: default
+    to: []

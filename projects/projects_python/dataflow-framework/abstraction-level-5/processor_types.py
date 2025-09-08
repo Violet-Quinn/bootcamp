@@ -1,3 +1,4 @@
-from typing import Iterator, Tuple, Callable
+from typing import Iterator, Tuple, Callable, List, Dict
 
-ProcessorFn = Callable[[Iterator[str]], Iterator[Tuple[str, str]]]
+TaggedLine = Tuple[str, str]
+ProcessorFn = Callable[[Iterator[TaggedLine]], Iterator[TaggedLine]]

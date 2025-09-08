@@ -4,45 +4,60 @@
 
 ## Task (abstraction-level-5)
 So far, your pipeline has processed all lines the same way — each line goes through the same sequence of processors.
+
 That works for uniform data, but real-world inputs are rarely that clean.
 
 In this level, you will build a general-purpose DAG-based processing engine where each line can take a different path through the system based on its content or tags. This is a major abstraction step — you’re no longer just transforming lines, you're building a flexible routing system.
 
- What You’re Building
-A general DAG-based processing engine where:
-- Each processor is a node
-- Processors yield tagged lines (e.g., ("errors", line))
-- The engine uses routing rules to send lines to the right downstream node(s)
-- You can define multiple paths in one config
+Desired Flow
+1. All lines go through a trim processor.
+2. Each line is tagged by tag_error or tag_warn (adds routing info).
+    * A generic splitter sends lines to different branches:
+    * errors → count and archive
+    * warnings → tally
+    * general → format and print
+Now you need a system where:
+* Processors can tag their output
+* The engine routes based on tags
+* You define all routing behavior in a config file
 
-___
+A general DAG-based processing engine where:
+* Each processor is a node
+* Processors yield tagged lines (e.g., ("errors", line))
+* The engine uses routing rules to send lines to the right downstream node(s)
+* You can define multiple paths in one config
+
+---
 
 ## Solution
-The pipeline is a Directed Acyclic Graph (DAG) of processing nodes (called processors). Each node processes input lines and yields output lines tagged with labels (tags). These tags determine how lines flow to downstream nodes according to routing rules defined in the YAML config.
+Execution Flow
+1. CLI Input: The command-line interface accepts:
+    * Input file path
+    * Output path (optional)
+    * DAG pipeline config YAML path
+    * Start node name (entry point in DAG)
+2. Reading Input Lines: Lines from the input file are read one-by-one and initially tagged with None (or a default tag).
+3. Loading DAG Pipeline:
+    * The YAML config is parsed.
+    * Each node defines a processor by its dotted import path.
+    * Processors are dynamically imported and instantiated.
+    * Routes map tags emitted by one node to downstream node names.
+4. DAG Engine Initialization: The DAGEngine is instantiated with the processors dictionary and the routing rules dictionary.
+5. Processing Start:
+    * The engine begins with the start node.
+    * Lines tagged with None are passed to the start node's processor.
+6. Iterative Processing:
+    * The engine maintains a queue of (current_node, lines) tuples to process.
+    * For each dequeued node, its processor is called with the input tagged lines.
+    * The processor yields tagged output lines (tag, line).
+7. Routing of Output Lines:
+    * For each output tagged line, the routing dictionary is consulted.
+    * Lines are assigned to one or more downstream nodes based on their tag.
+    * If a tag doesn’t map downstream, the line is considered terminal output.
+    * Downstream nodes and their input lines are queued for further processing.
+8. Completion:
+    * When the queue is empty, the accumulated terminal output lines are returned.
+    * The CLI writes these lines to a file or prints to stdout.
 
-Flow of the pipeline
-1. Configuration (pipeline.yaml)
-    - Defines nodes by name.
-    - Each node specifies a processor function (like snake_case converter or uppercase converter).
-    - Each node defines routing rules: for each tag, which downstream nodes receive that output.
-2. Initialization
-- Your code reads this YAML config.
-- For each node:
-        - Dynamically imports the processor function.
-        - Creates a PipelineNode object for the node.
-- Sets up downstream routing based on tags.
-3. Identifying entry points
-- Nodes with no incoming edges are marked as entry points.
-- These entry points get the initial raw input lines.
-4. Processing runs
-- Maintains a queue of input lines for each node.
-- Seeds input lines to entry nodes.
-- For each node with queued input lines:
-    - Feeds input lines (an iterator) to the node's processor function.
-    - The processor yields (tag, line) pairs.
-    - Looks up routing rules for the tag.
-    - Routes the output line to all downstream nodes configured for that tag.
-    - If no downstream node for the tag, line is collected as final output.
-- This loop continues until no node has queued lines to process.
-5. Yielding final output
-- All lines that reach a tag with no downstream nodes are yielded as pipeline final output.
+Run:
+uv run main.py --input test_input.txt --config pipeline.yaml --start-node joiner
