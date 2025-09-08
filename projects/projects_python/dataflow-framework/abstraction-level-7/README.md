@@ -45,20 +45,61 @@ Task
 ___
 
 ## Solution
-This level builds a state-machine-based dataflow pipeline for text processing, with observability (metrics, tracing, errors) and a live dashboard via FastAPI. The pipeline is dynamically configured and routes lines between processors based on tags.
+1. state_engine.py
+* This is the core processing engine of the pipeline.
+* It loads the pipeline configuration YAML to set up processing nodes and routing.
+* Dynamically loads processor functions.
+* Runs tubes of lines through processors according to routing until reaching the end.
+* Maintains thread-safe metrics, traces, and errors collections during processing, used later for observability.
+* Returns final output lines after processing input.
 
-Directory Structure & Roles
-- main.py: CLI entry point. Runs the pipeline in either DAG or state-machine mode, with optional tracing/dashboard.
-- pipeline_state.yaml: Configures the state-machine pipeline: tags, processor functions, routing.
-- pipeline.py: Implements DAG pipeline logic (not used in state mode, but available).
-- core.py: Contains a generic DAG routing function (not used directly in this level).
-- processor_types.py: Defines the processor function type signature.
-- state_engine.py: Implements the state-machine routing engine, with observability hooks.
-- test_input.txt: Example input file for pipeline runs.
-- observability/: Implements metrics, tracing, error logging, and the FastAPI dashboard.
-- processors/: Contains all processor functions (transformers, filters, output, etc.).
+2. dashboard.py
+* Defines FastAPI API routes to expose pipeline metrics, traces, and errors.
+* Wraps routes in a router with CORS middleware for cross-origin access.
+* Provides JSON responses for /api/stats, /api/trace, /api/errors.
+* Also exposes a root /api/ endpoint for a status message.
+* Intended to be imported and mounted into your FastAPI application.
 
-Summary
-- Intent: Build a dynamic, observable, state-machine-based text processing pipeline.
-- Flow: CLI → config → state engine → processors → output, with live metrics/tracing/errors via dashboard.
-- Extensibility: Add new processors or change routing by editing config, not code.
+3. main.py
+* Defines CLI commands using typer.
+* On run command:
+    * Reads input file lines and sets up the StateEngine with pipeline config.
+    * If dashboard requested, starts pipeline processing in background thread.
+    * Instantiates FastAPI app from dashboard.py, mounts static frontend files at /.
+    * Calls uvicorn.run() to start ASGI server serving both frontend and API.
+    * If no dashboard requested, runs pipeline synchronously and outputs final lines.
+* Acts as the application entry point controlling lifecycle and coordination.
+
+4. index.html (inside static/ folder)
+* Vanilla HTML/CSS/JS frontend dashboard, visually inspired by Kubernetes dashboard.
+* Uses vanilla JS fetch calls every 5 seconds to /api/stats, /api/trace, /api/errors.
+* Dynamically updates metric cards, trace table, and error table on the page.
+* Simple, clean UI allowing real-time monitoring of data pipeline observability outputs.
+
+Flow of execution overview
+1. User runs command:
+```bash
+    python3 main.py --input input.txt --dashboard or without --dashboard to run without UI.
+```
+2. main.py:
+    * Loads input lines.
+    * Instantiates StateEngine with pipeline config.
+    * If dashboard enabled:
+        * Runs pipeline processing on a background thread, which processes each input line through pipeline nodes.
+        * Sets up FastAPI app with API routes from dashboard.py.
+        * Serves static frontend (index.html) at root path /.
+        * Starts Uvicorn ASGI server to serve API + UI.
+3. Pipeline processing:
+    * StateEngine.run() feeds lines to processors in order.
+    * Collects metrics (counts, durations, errors), traces of line paths, and errors, updating thread-safe stores.
+    * Outputs final processed lines on completion.
+4. Frontend:
+    * Loads HTML+JS dashboard.
+    * Calls /api/stats, /api/trace, /api/errors endpoints every 5 seconds.
+    * Displays live metrics, traces, and error logs visually.
+5. User can monitor pipeline execution and debug via dashboard UI in browser.
+
+Run:
+python3 main.py --input test_input.txt --trace --dashboard --config pipeline.yaml
+Or
+python3 main.py --input test_input.txt --config pipeline.yaml

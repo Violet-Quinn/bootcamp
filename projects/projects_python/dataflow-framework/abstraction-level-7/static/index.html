@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dataflow Observability Dashboard</title>
+<style>
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    margin: 0; padding: 0;
+    background-color: #f5f7fa;
+    color: #222;
+  }
+  header {
+    background-color: #20232a;
+    padding: 1rem 2rem;
+    color: #61dafb;
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+  main {
+    padding: 1rem 2rem;
+  }
+  .section {
+    margin-bottom: 2rem;
+  }
+  .card-container {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .card {
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+    padding: 1rem;
+    min-width: 200px;
+    flex: 1 1 200px;
+    color: #222;
+  }
+  .card.error {
+    border-left: 4px solid #d9534f;
+    background: #fbeaea;
+  }
+  h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1.25rem;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.25rem;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+    overflow-x:auto;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #e1e4e8;
+    font-size: 0.9rem;
+  }
+  thead {
+    background-color: #f1f3f5;
+  }
+  tbody tr:hover {
+    background-color: #f0f5ff;
+  }
+  .error-text {
+    color: #d9534f;
+    font-weight: bold;
+  }
+  .container {
+    max-width: 1200px;
+    margin: auto;
+  }
+</style>
+</head>
+<body>
+<header>Dataflow Observability Dashboard</header>
+<main class="container">
+  <section class="section" id="metrics-section">
+    <h2>Processor Metrics</h2>
+    <div id="metrics-cards" class="card-container">
+      Loading metrics...
+    </div>
+  </section>
+
+  <section class="section" id="trace-section">
+    <h2>Recent Traces</h2>
+    <table id="trace-table">
+      <thead>
+        <tr><th>Line</th><th>Path</th></tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="2">Loading traces...</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="error-section">
+    <h2>Recent Errors</h2>
+    <table id="error-table">
+      <thead>
+        <tr><th>Processor</th><th>Error</th></tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="2">Loading errors...</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+  async function fetchJson(url) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      return await resp.json();
+    } catch (err) {
+      console.error("Fetch error on", url, err);
+      return null;
+    }
+  }
+
+  function createMetricCard(name, metric) {
+    const div = document.createElement("div");
+    div.className = "card" + (metric.errors > 0 ? " error" : "");
+    div.innerHTML = `
+      <h3>${name}</h3>
+      <p><strong>Count:</strong> ${metric.count}</p>
+      <p><strong>Total Time:</strong> ${metric.time.toFixed(3)} s</p>
+      <p><strong>Errors:</strong> ${metric.errors}</p>
+    `;
+    return div;
+  }
+
+  function updateMetrics(data) {
+    const container = document.getElementById("metrics-cards");
+    container.innerHTML = "";
+    if (!data || Object.keys(data).length === 0) {
+      container.textContent = "No processor metrics available.";
+      return;
+    }
+    for (const [proc, met] of Object.entries(data)) {
+      container.appendChild(createMetricCard(proc, met));
+    }
+  }
+
+  function updateTraceTable(data) {
+    const tbody = document.querySelector("#trace-table tbody");
+    tbody.innerHTML = "";
+    if (!data || data.traces.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="2">No recent traces.</td></tr>`;
+      return;
+    }
+    for (const trace of data.traces) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${trace.line}</td><td>${trace.path.join(" → ")}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  function updateErrorTable(data) {
+    const tbody = document.querySelector("#error-table tbody");
+    tbody.innerHTML = "";
+    if (!data || data.errors.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="2">No recent errors.</td></tr>`;
+      return;
+    }
+    for (const err of data.errors) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${err.processor}</td><td class="error-text">${err.error}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function refreshData() {
+    const stats = await fetchJson("/api/stats");
+    updateMetrics(stats);
+
+    const traces = await fetchJson("/api/trace");
+    updateTraceTable(traces);
+
+    const errors = await fetchJson("/api/errors");
+    updateErrorTable(errors);
+  }
+
+  // Initial load and polling every 5 seconds
+  refreshData();
+  setInterval(refreshData, 5000);
+</script>
+</body>
+</html>

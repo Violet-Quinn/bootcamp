@@ -1,5 +1,10 @@
 def snake(lines):
-    """Converts general logs to snake_case."""
-    for line in lines:
-        snake_case = line.lower().replace(" ", "_")
-        yield ("end", snake_case)
+    """Convert lines to snake_case."""
+    import re
+    def to_snake_case(s):
+        s = re.sub(r'[\W]+', '_', s)
+        s = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s)
+        return s.lower().strip('_')
+
+    for tag, line in lines:
+        yield ("end", to_snake_case(line))

@@ -1,54 +1,46 @@
+import threading
 import typer
-from typing import Optional
 from state_engine import StateEngine
-from pipeline import Pipeline
-from observability.shared_state import SharedState
-from observability.dashboard import start_dashboard_thread
+from fastapi.staticfiles import StaticFiles
+import uvicorn
 
+from dashboard.dashboard import create_dashboard_app  # your refactored dashboard app factory
 
-app = typer.Typer(help="Dataflow pipeline runner with DAG or State Machine modes.")
+app = typer.Typer(help="Level-7 Observability Dataflow Engine CLI")
 
+def process_engine(engine, input_lines):
+    outputs = engine.run(input_lines)
+    typer.echo("\n--- Final Output (State Engine) ---")
+    for line in outputs:
+        typer.echo(line)
 
 @app.command()
 def run(
     input: typer.FileText = typer.Option(..., help="Input text file with lines to process"),
-    mode: str = typer.Option("state", help="Pipeline mode: 'state' or 'dag'"),
-    trace: bool = typer.Option(False, help="Enable trace collection and observability dashboard"),
-) -> None:
-    """
-    Run the dataflow pipeline using either DAG or State Engine mode.
-
-    Args:
-        input (typer.FileText): Input text file containing lines to process.
-        mode (str): Pipeline mode ('dag' or 'state'). Defaults to 'state'.
-        trace (bool): Whether to enable trace collection and observability dashboard.
-    """
+    config: str = typer.Option("pipeline.yaml", help="Path to pipeline config YAML file"),
+    trace: bool = typer.Option(False, help="Enable tracing of line journeys"),
+    dashboard: bool = typer.Option(False, help="Start FastAPI observability dashboard")
+):
     input_lines = [line.strip() for line in input if line.strip()]
-    shared_state: Optional[SharedState] = None
+    engine = StateEngine(config, trace=trace)
 
-    if trace:
-        shared_state = SharedState()
-        start_dashboard_thread(shared_state)
-        typer.echo("Observability dashboard running at http://localhost:8000")
+    if dashboard:
+        # Run pipeline in background thread
+        processing_thread = threading.Thread(target=process_engine, args=(engine, input_lines), daemon=True)
+        processing_thread.start()
 
-    if mode == "dag":
-        typer.echo("Running Level-5 DAG pipeline...")
-        pipeline = Pipeline("pipeline.yaml")
-        outputs = pipeline.run(input_lines)
-        typer.echo("\n--- Final Output (DAG) ---")
-        for line in outputs:
-            typer.echo(line)
-    elif mode == "state":
-        typer.echo("Running Level-6 State Routing engine...")
-        engine = StateEngine("pipeline_state.yaml", shared_state, trace_enabled=trace)
-        outputs = engine.run(input_lines)
-        typer.echo("\n--- Final Output (State Engine) ---")
-        for line in outputs:
-            typer.echo(line)
+        # Create FastAPI app instance including API routes
+        app_instance = create_dashboard_app(engine)
+
+        # Mount static files (your frontend dashboard) at root
+        app_instance.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+        # Start Uvicorn server to serve both API and frontend
+        uvicorn.run(app_instance, host="127.0.0.1", port=8000)
+
     else:
-        typer.echo(f"Invalid mode '{mode}'. Use 'dag' or 'state'.", err=True)
-        raise typer.Exit(code=1)
-
+        # Run pipeline synchronously without dashboard
+        process_engine(engine, input_lines)
 
 if __name__ == "__main__":
     app()

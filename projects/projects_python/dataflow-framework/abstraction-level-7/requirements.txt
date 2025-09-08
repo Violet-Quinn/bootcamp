@@ -1,0 +1,6 @@
+typer
+fastapi
+uvicorn
+networkx
+pyyaml
+matplotlib
