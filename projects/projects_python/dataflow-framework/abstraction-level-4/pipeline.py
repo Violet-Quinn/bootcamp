@@ -1,55 +1,31 @@
 import yaml
-import importlib
-import inspect
-from core import stream_wrapper
+from typing import List
+from importlib import import_module
 from processor_types import ProcessorFn
-from typing import List, Union, Callable
+from core import line_to_stream_processor
 
+def load_function(dotted_path: str):
+    module_path, func_name = dotted_path.rsplit(".", 1)
+    module = import_module(module_path)
+    func = getattr(module, func_name)
+    return func
 
-def is_generator_function(obj: Callable) -> bool:
-    """
-    Return True if obj is a generator function.
-    """
-    return inspect.isgeneratorfunction(obj)
-
-
-def build_pipeline(config_path: str) -> List[ProcessorFn]:
-    """
-    Build a data processing pipeline from a YAML configuration file."""
-    with open(config_path, "r") as f:
+def load_pipeline_from_config(config_path: str) -> List[ProcessorFn]:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
-
-    if "pipeline" not in config:
-        raise KeyError("Missing 'pipeline' key in config file")
-
     processors: List[ProcessorFn] = []
-    for step in config["pipeline"]:
-        import_path = step.get("type")
-        if not import_path:
-            raise ValueError("Processor step missing 'type' key")
+    for step in config.get("pipeline", []):
+        func_path = step["type"]
+        func = load_function(func_path)
 
-        module_path, func_name = import_path.rsplit(".", 1)
-        try:
-            module = importlib.import_module(module_path)
-            proc_obj = getattr(module, func_name)
+        # If it's a class, instantiate it
+        if isinstance(func, type):
+            func = func()
 
-            if isinstance(proc_obj, type):
-                proc_instance = proc_obj()
-            else:
-                proc_instance = proc_obj
+        # Wrap old style str->str functions with stream adapter
+        if callable(func) and not hasattr(func, "__call__") or hasattr(func, "__code__") and getattr(func, "__code__", None) and func.__code__.co_argcount == 1:
+            func = line_to_stream_processor(func)
 
-            sig = inspect.signature(proc_instance)
-            if (
-                callable(proc_instance)
-                and not is_generator_function(proc_instance)
-                and len(sig.parameters) == 1
-                and sig.return_annotation in [str, inspect.Signature.empty]
-            ):
-                proc_instance = stream_wrapper(proc_instance)
-
-            processors.append(proc_instance)
-
-        except (ImportError, AttributeError) as e:
-            raise ImportError(f"Failed to import '{import_path}': {e}")
-
+        processors.append(func)
     return processors
+

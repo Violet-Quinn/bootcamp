@@ -1,16 +1,19 @@
+from typing import List, Iterator
 from processor_types import ProcessorFn
-from typing import Iterator, Iterable, List, Callable
 
 def apply_processors(lines: Iterator[str], processors: List[ProcessorFn]) -> Iterator[str]:
-    """Applies a list of processors to an iterator of lines."""
+    """Apply processors sequentially in streaming fashion."""
     for processor in processors:
         lines = processor(lines)
-    yield from lines
+    return lines
 
-        
-def stream_wrapper(simple_processor: Callable[[str], str]) -> ProcessorFn:
-    """Wraps a simple line processor into a processor function."""
+def line_to_stream_processor(line_processor):
+    """
+    Decorator to adapt simple str -> str processor into stream processor.
+    """
     def processor(lines: Iterator[str]) -> Iterator[str]:
         for line in lines:
-            yield simple_processor(line)
+            result = line_processor(line)
+            if result is not None:
+                yield result
     return processor

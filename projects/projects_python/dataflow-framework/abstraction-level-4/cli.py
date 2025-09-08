@@ -1,23 +1,36 @@
 import typer
-from main import run_pipeline
 from typing import Optional
+from dotenv import load_dotenv
+from pipeline import load_pipeline_from_config
+from core import apply_processors
 
 app = typer.Typer()
+load_dotenv()
+
+def read_lines(path: str):
+    with open(path) as f:
+        for line in f:
+            yield line.rstrip("\n")
+
+def write_output(lines, output_path: Optional[str]) -> None:
+    if output_path:
+        with open(output_path, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+    else:
+        for line in lines:
+            typer.echo(line)
 
 @app.command()
 def main(
-    input: str = typer.Option(..., help="Input file path"),
-    output: Optional[str] = typer.Option(None, help="Output file path (optional)"),
-    config: str = typer.Option(..., help="Path to pipeline YAML config file")
+    input_path: str = typer.Option(..., "--input", "-i", help="Input file path"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+    config: str = typer.Option("pipeline.yaml", "--config", "-c", help="Pipeline YAML config path"),
 ):
-    """
-    CLI command that runs the processing pipeline based on YAML config.
-    """
-    try:
-        run_pipeline(input, output, config)
-    except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(code=1)
+    processors = load_pipeline_from_config(config)
+    lines = read_lines(input_path)
+    processed = apply_processors(lines, processors)
+    write_output(processed, output)
 
 if __name__ == "__main__":
     app()

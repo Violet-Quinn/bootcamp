@@ -1,7 +1,5 @@
-# pipeline:
-  # - type: processors.snake.to_snakecase
-  # - type: processors.upper.to_uppercase
 pipeline:
-  - type: processors.line_count.LineCountProcessor
-  - type: processors.join_pairs.join_pairs
-
+  - type: processors.snake.to_snakecase
+  - type: processors.upper.to_uppercase
+  - type: processors.line_counter.LineCounter
+  - type: processors.join_two_lines.JoinEveryTwoLines

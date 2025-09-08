@@ -34,27 +34,32 @@ Requirements:
 ---
 
 ## Solution
-This project is a configurable text processing pipeline. It reads lines from an input file, processes them using a sequence of functions (processors), and writes the results to an output file or prints them.
+What Each File Does
+* types.py: Defines the updated processor function type as Callable[[Iterator[str]], Iterator[str]].
+* core.py: Provides functions to sequentially apply streaming processors to input lines and a decorator to adapt old-style line processors.
+* processors/: Contains processor implementations:
+    * Simple stateless ones like snakecase, uppercase adapted for streaming.
+    * Stateful ones such as LineCounter and JoinEveryTwoLines demonstrating state and fan-in/fan-out behaviors.
+* pipeline.py: Loads pipeline config YAML, dynamically imports processors by dotted path, instantiates classes, and wraps simple functions for streaming compatibility.
+* cli.py: Handles command-line interface, reads input lines, loads the dynamic streaming pipeline, applies processors in order, and writes output.
+* main.py: Entry point that imports app from cli.py and runs the Typer CLI app.
 
-How it works (step by step):
-1. Configuration
-The pipeline steps are defined in pipeline.yaml. Each step is a processor function specified by its import path (e.g., processors.line_count.LineCountProcessor).
+Flow of Execution
+1. User runs CLI
+2. main.py calls app() from cli.py, triggering Typer.
+3. cli.py:
+    * Reads input.txt line by line as a stream.
+    * Loads processors dynamically based on YAML config in pipeline.py.
+    * Applies processors sequentially to the input stream using core.py utilities.
+    * Writes the final transformed lines to output.
+4. In pipeline.py:
+    * YAML is parsed.
+    * Processor functions/classes are dynamically imported.
+    * Classes are instantiated; simple functions wrapped for streaming compatibility.
+5. Each processor:
+    * Receives an iterator of lines.
+    * Yields processed output lines, optionally maintaining state or buffering lines.
+6. Output is streamed to console or output file as configured.
 
-2. CLI Entry Point
-You run the program using the CLI in cli.py, providing the input file, output file (optional), and config file.
-
-3. Pipeline Building
-The function build_pipeline reads the YAML config and dynamically loads each processor function/class.
-
-4. Reading Input
-`read_lines` reads lines from the input file.
-
-5. Processing
-`apply_processors` applies each processor to the lines in sequence.
-
-Some processors work on each line (e.g., uppercase).
-Some work on the whole stream (e.g., joining pairs of lines, counting lines).
-6. Writing Output
-`write_output` writes the processed lines to the output file or prints them.
-
-You can easily add new processors and change the pipeline by editing `pipeline.yaml` without changing the main code.
+Run:
+uv run cli.py --input test_input.txt --config pipeline.yaml
