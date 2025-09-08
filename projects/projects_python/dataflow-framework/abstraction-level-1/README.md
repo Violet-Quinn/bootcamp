@@ -22,36 +22,32 @@ Implement both using basic string operations. Choose the behavior based on the s
 ---
 
 ## Solution
-This script provides a simple command-line interface built with Typer to process text files line by line. It allows you to transform text into different formats (uppercase or snake_case) and write the output either to the console or to a file.
-
+This script provides a simple command-line interface (CLI) built with Typer to process text files line by line. It offers configurable text transformations and output options.
 How it works:
-- Read an input text file using --input (or -i)
-
-- Transform each line into:
-    Uppercase (default or --mode uppercase)
-    Snake case (via --mode snakecase)
-
-- Output results to:
-    Console (stdout) (default)
-    A file using --output
-
-## Usage
-1. Basic usage (default uppercase transform)
+* Reads an input file specified with the `--input` (or `-i`) option.
+* Transforms each line according to the selected mode:
+    * uppercase (default or specified by `--mode` uppercase): converts lines to uppercase.
+    * snakecase (specified by `--mode snakecase`): converts lines to lowercase and replaces spaces with underscores.
+* Outputs the transformed lines:
+    * To the console (standard output) by default.
+    * To a file if the `--output` option is provided.
+Usage Examples:
+1. Basic usage (default uppercase transformation)
 ```bash
-    python process.py --input input.txt
+python process.py --input input.txt
 ```
-2. Specify transformation mode
+2. Specify snakecase transformation
 ```bash
-    python process.py --input input.txt --mode snakecase
+python process.py --input input.txt --mode snakecase
 ```
-3. Save results to a file
+3. Write the output to a file
 ```bash
-    python process.py --input input.txt --output out.txt
+python process.py --input input.txt --output out.txt
 ```
-Environment Variables
-A default processing mode was set using an environment variable.
-Create a .env file with following:
+Environment Variable Support
+* The mode option defaults can be set via a `.env` file, making the behavior configurable without changing the command line.
+* Example `.env` file content to default to snakecase mode:
 ```bash
-    MODE=snakecase
+MODE=snakecase
 ```
-Override it with the --mode option
+* The CLI option `--mode` overrides the `.env` default when specified.
