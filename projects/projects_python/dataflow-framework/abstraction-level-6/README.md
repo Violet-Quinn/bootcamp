@@ -32,30 +32,57 @@ Task:
 ___
 
 ## Solution
-- The project is a text processing pipeline. It reads lines from an input file (test_input.txt), processes each line through a series of steps, and produces output.
-- The processing steps and their connections are defined in a config file (pipeline_state.yaml).
-- The main logic is in `state_engine.py`, which acts as a state machine: each line is routed through different processors based on its type (error, warning, general, etc.).
+1. main.py
+* Entry point CLI script using Typer.
+* Accepts input file and optional config path.
+* Instantiates the StateEngine with config.
+* Runs the engine on the input lines.
+* Prints the final output lines to the console.
+* Supports optional graph visualization.
 
-Flow of the Code
-1. Read Input
-    - The CLI in main.py reads lines from test_input.txt.
-2. Load Pipeline Configuration
-    - The pipeline config (pipeline_state.yaml) lists all processors and how lines should flow between them.
-3. Initialize State Engine
-    - `StateEngine` loads the processors dynamically (using Python imports) and sets up the routing.
-4. Process Each Line
-    - All lines start at the "start" processor (processors/start.py), which tags each line as "error", "warn", or "general" based on its content.
-    - Depending on the tag, the line is sent to the corresponding processor:
-        - "error" → processors/filters.py (only_error)
-        - "warn" → processors/filters.py (only_warn)
-        - "general" → processors/formatters.py (snake)
-    - Each processor transforms the line and passes it to the "end" processor (processors/output.py), which prints the final output.
-5. Output Generation
-    - The "end" processor prints each final line with a FINAL: prefix and yields it as output.
-    - All processed lines are collected and displayed.
+2. state_engine.py
+* Core state routing engine.
+* Loads YAML config defining processors and routing graph.
+* Uses importlib to load processor functions dynamically.
+* Builds the routing graph internally with networkx.DiGraph.
+* Validates the graph for cycles and proper routing tags.
+* Implements runtime run() that iteratively routes lines through processors based on tags, using a queue.
+* Detects infinite loops with visit counting.
+* Provides optional visualization method to display routing graph with arrows.
 
-Summary:
-- Input lines are classified and routed through different processors.
-- Processors transform lines based on their type.
-- Output is printed after all processing steps.
-You can see the routing and processor definitions in pipeline_state.yaml, and the processor logic in the processors/ folder.
+3. core.py
+* Provides an alternative routing implementation using a DAG and queues.
+* Builds internal routing queues for nodes.
+* Routes lines through nodes according to routing rules.
+* Can be adapted to use networkx for graph validation and visualization.
+
+4. pipeline.py
+* Implements a DAG-based pipeline (Level 5).
+* Loads YAML config.
+* Dynamically loads processors.
+* Constructs PipelineNode instances and connects them according to routing.
+* Runs pipeline in batch mode by passing lines from node to node.
+* Different from StateEngine as routing is static graph without dynamic tags.
+
+5. processor modules (e.g., start.py, filters.py, formatters.py, output.py, etc.)
+* Contain individual processing units called by the state engine.
+* Defined as callable functions taking an iterator of (tag, line) tuples.
+* Perform filtering, tagging, formatting, output etc.
+* Emit (tag, line) pairs for downstream routing.
+
+Overall Flow of Execution:
+* User runs CLI (main.py) with input file and config.
+* StateEngine loads config, builds routing graph, loads processors.
+* Input lines are tagged with start and seeded into the queue.
+* Iteratively, for each (tag, line) pair:
+    * The processor for tag processes the line.
+    * Outputs are emitted as (next_tag, line) pairs.
+    * Lines are queued to downstream processors per routing.
+* Lines continue flowing through states until tagged with end and emitted as output.
+* Visualization (optional) shows flow graph for debugging or understanding.
+* Final lines printed/displayed as the system output.
+
+Run:
+python3 main.py --input test_input.txt --config pipeline.yaml --visualize
+Or
+python3 main.py --input test_input.txt --config pipeline.yaml
