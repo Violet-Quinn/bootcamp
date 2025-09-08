@@ -34,15 +34,15 @@ How it works:
 Usage Examples:
 1. Basic usage (default uppercase transformation)
 ```bash
-python process.py --input input.txt
+python3 process.py --input input.txt
 ```
 2. Specify snakecase transformation
 ```bash
-python process.py --input input.txt --mode snakecase
+pytho3 process.py --input input.txt --mode snakecase
 ```
 3. Write the output to a file
 ```bash
-python process.py --input input.txt --output out.txt
+python3 process.py --input input.txt --output out.txt
 ```
 Environment Variable Support
 * The mode option defaults can be set via a `.env` file, making the behavior configurable without changing the command line.
