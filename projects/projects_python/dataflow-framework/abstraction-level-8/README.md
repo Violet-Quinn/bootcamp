@@ -28,66 +28,57 @@ Task:
 ___
 
 ## Solution
-Level 8 Directory Structure and Roles:
-abstraction-level-8/
-├── main.py                          # CLI entry point, starts folder monitor and dashboard
-├── folder_monitor.py                # Core file watcher: monitors folders, manages file lifecycle, processes files, writes output
-├── state_engine.py                 # Stateful tag-based routing engine for line processing pipeline (reused from Level 7)
-├── processor_types.py              # Processor function type definitions (callable signature) (reused)
-├── observability/
-│   ├── shared_state.py             # Thread-safe shared metrics, errors, traces, and folder queue stats
-│   ├── instrumentation.py          # Wrapping processors for metrics, tracing, error collection
-│   ├── dashboard.py                # FastAPI dashboard server exposing metrics, traces, errors, plus folder queue endpoints
-├── processors/                     # Pure text-line processor functions (transforms only; one output line per input)
-│   ├── filters.py                  # Filter processors like only_error, only_warn
-│   ├── join_pairs.py               # Stateful processor joining line pairs
-│   ├── line_count.py               # Stateful processor counting lines
-│   ├── output.py                   # Final output processor that prints lines (used for "end")
-│   ├── snake.py                   # Snake case formatter (replaces formatters.py)
-│   ├── start.py                   # Start node processor: tags lines (error, warn, general)
-│   ├── upper.py                   # Uppercase processing (optional)
-├── pipeline_state.yaml             # YAML config defining nodes (tags) and their processor functions
-├── utils.py                       # Utility functions like atomic file moves, timestamp helpers
-└── test_input.txt                  # Example input file for testing the pipeline
+1. main.py
+* This is the entry point of your application.
+* Sets up the StateEngine that manages pipeline processing state, metrics, traces, and errors.
+* Starts the FolderMonitor in a background thread to watch a directory for new files.
+* The folder monitor picks up files, processes them via the StateEngine, and updates metrics continuously.
+* Creates and runs the FastAPI dashboard app which serves the frontend UI and API endpoints.
+* The dashboard shows processing stats, recent traces, and errors in near real-time by querying the backend APIs.
 
-How It Works:
-1. Startup
-    - main.py is started from the command line, with options to specify the --watch-dir and enable tracing/dashboard.
-    - It creates a shared observability state instance (SharedState) used to collect runtime metrics, traces, errors, and folder queue stats.
-    - It launches the FastAPI dashboard (on separate thread) for live monitoring.
-    - It creates and runs an instance of FolderMonitor, passing it the shared state and trace flag.
-2. Folder Monitor Initialization
-    - The FolderMonitor class initializes by creating a directory structure under the given watch_dir:
-        - unprocessed/: for new files awaiting processing.
-        - underprocess/: for files currently being processed.
-        - processed/: for files successfully processed.
-    - On startup, the monitor runs _recover_incomplete_files() to move any files left in underprocess back to unprocessed so they can be retried—providing fault tolerance and recovery from crashes.
-3. File Monitoring Loop
-    - The monitor runs indefinitely (run_forever()).
-    - It polls unprocessed/ folder regularly (e.g., every second).
-    - When it detects files, it atomically moves each file from unprocessed/ to underprocess/ to claim ownership for processing.
-    - It updates observability state with current folder counts and current file processing info.
-4. File Processing
-    - The monitor reads all lines from the file (skipping blank lines).
-    - It calls the StateEngine.run(lines) method, which drives the state-machine pipeline using the YAML-configured processors.
-    - The state engine routes lines between processors based on tags, handles branching/fan-out, and collects observability data (metrics, tracing).
-    - Processors in the processors/ folder perform line transformations (e.g., tagging, filtering, formatting).
-    - The final output lines are collected after the pipeline run.
-5. Saving Processed Files
-    - After processing, the monitor writes the output lines back as a new file with the same filename into processed/, overwriting or replacing the old content.
-    - The patrol removes the old file from underprocess/.
-    - It updates the processed file history with timestamps in shared observability state.
-6. Observability
-    - Metrics, traces, error logs are recorded per processor and overall.
-    - Folder counts (unprocessed, underprocess, processed), the current file being processed, and recent processed file history are also stored in shared state.
-    - The FastAPI dashboard at http://localhost:8000 exposes REST API endpoints to view real-time metrics and file queue states.
-7. Fault Tolerance
-    - If the system crashes or is killed during processing:
-        - On restart, the folder monitor moves any files left in underprocess back to unprocessed.
-        - This guarantees idempotent retry and no stuck files.
-    - File atomic moves and locking ensure no partial or concurrent processing occurs.
-    - The infinite loop recovers from transient errors and keeps running indefinitely.
+2. folder_monitor.py
+* Watches a target "watch" directory continuously.
+* Manages subfolders: unprocessed, underprocess, and processed for file state.
+* Moves files through these directories as they are picked up, processed, and finalized.
+* Calls StateEngine.run() to process lines through the multi-stage pipeline.
+* Updates shared metrics on folder states and currently processing file in the StateEngine.
+* Captures and reports errors occurring during file processing for dashboard display.
+
+3. state_engine.py
+* Core pipeline processing engine managing processors, routing, and pipeline state.
+* Loads processing nodes from a YAML config, dynamically imports processor code.
+* Maintains a directed acyclic graph of tags and their routes through processors.
+* Runs lines through processors maintaining routing, metrics (counts, timings, errors), traces, and errors.
+* Thread-safe data structures with locks for concurrent updates by folder monitor and dashboard.
+
+4. dashboard.py
+* Defines FastAPI API routes serving JSON data representing metrics, traces, and errors.
+* Adds CORS middleware allowing frontend JS to access backend APIs.
+* Returns real-time state data protected by locks to ensure consistency.
+* Returns cache-control headers majorly to prevent browser-side caching of stale data.
+
+5. static/index.html
+* Frontend dashboard UI consuming the FastAPI API endpoints.
+* Displays processor metrics as cards, recent processing traces, and recent errors in tables.
+* Auto-refreshes every 5 seconds fetching fresh JSON from API endpoints.
+* Uses inline CSS styles for UI styling.
+* Dynamically creates and updates DOM elements to represent live backend data.
+
+Flow of Execution:
+1. Startup: main.py initializes StateEngine, starts FolderMonitor thread, and runs FastAPI dashboard server.
+2. File Watching & Processing:
+    * FolderMonitor sees new files in unprocessed/, moves them to underprocess/.
+    * Calls StateEngine.run() to send lines through processors following routing.
+    * Updates file state metrics in StateEngine.metrics.
+3. State & Metrics Updates:
+    * StateEngine tracks processor call counts, timings, errors.
+    * FolderMonitor updates folder/file counts in metrics.
+    * Traces and errors collected for troubleshooting and display.
+4. Dashboard UI Updates:
+    * Frontend periodically fetches /api/stats, /api/trace, and /api/errors.
+    * Backend protects shared state with locks and returns fresh JSON data with no-cache headers.
+    * Frontend reconstructs HTML to show up-to-date stats, traces, errors to user.
 
 
 Run:
-`python3 main.py --watch-dir watch_dir --trace`
+python3 main.py --watch-dir watch_dir --config pipeline.yaml --dashboard

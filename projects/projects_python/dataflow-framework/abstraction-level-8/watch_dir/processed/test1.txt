@@ -1,0 +1,5 @@
+this_is_a_general_line
+[ERROR] This line contains an error.
+[WARN] Warning! This line has a warning.
+another_general_line
+[ERROR] Error occurred in processing.

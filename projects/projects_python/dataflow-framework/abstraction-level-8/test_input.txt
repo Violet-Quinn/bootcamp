@@ -1,0 +1,7 @@
+System started successfully
+Warning: CPU temperature high
+Error: Unable to connect to database
+User logged in
+Warning: Low disk space
+Error: Failed to load module
+General informational message

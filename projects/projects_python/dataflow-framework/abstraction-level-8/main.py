@@ -1,32 +1,39 @@
+import threading
 import typer
-import time
-from observability.shared_state import SharedState
-from observability.dashboard import start_dashboard_thread
-from folder_monitor import FolderMonitor
+from state_engine import StateEngine
+from fastapi.staticfiles import StaticFiles
+import uvicorn
+from dashboard.dashboard import create_dashboard_app
+from folder_monitor import FolderMonitor  # New import
 
-app = typer.Typer(help="Level 8: Automated Folder Monitor with Recovery and Observability")
+
+app = typer.Typer(help="Level-8 Folder Monitor Dataflow Engine CLI")
+
+
+def run_folder_monitor_and_dashboard(state_engine: StateEngine, watch_dir: str):
+    monitor = FolderMonitor(watch_dir, state_engine)
+    monitor_thread = threading.Thread(target=monitor.run, daemon=True)
+    monitor_thread.start()
+
+    app_instance = create_dashboard_app(state_engine)
+    app_instance.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+    uvicorn.run(app_instance, host="127.0.0.1", port=8000)
+
 
 @app.command()
 def run(
-    watch_dir: str = typer.Option(..., help="Root directory to watch with queue subfolders"),
-    trace: bool = typer.Option(False, help="Enable tracing and observability dashboard"),
-) -> None:
-    """
-    Start the folder monitoring service with live dashboard and pipeline processing.
-    Runs indefinitely.
-    """
-    shared_state = SharedState()
+    config: str = typer.Option("pipeline.yaml", help="Path to pipeline config YAML file"),
+    watch_dir: str = typer.Option("watch_dir", help="Directory to watch for input files"),
+    dashboard: bool = typer.Option(True, help="Whether to start the observability dashboard"),
+):
+    engine = StateEngine(config, trace=True)  # Enable trace for visibility
 
-    if trace:
-        start_dashboard_thread(shared_state)
-        typer.echo("Observability dashboard running at http://localhost:8000")
+    if dashboard:
+        run_folder_monitor_and_dashboard(engine, watch_dir)
+    else:
+        typer.echo("Dashboard must be enabled to run folder monitor.")
 
-    monitor = FolderMonitor(watch_dir, shared_state, trace_enabled=trace)
-    typer.echo(f"Starting folder monitor for directory: {watch_dir}")
-    try:
-        monitor.run_forever()
-    except KeyboardInterrupt:
-        typer.echo("\nShutting down folder monitor gracefully...")
 
 if __name__ == "__main__":
     app()

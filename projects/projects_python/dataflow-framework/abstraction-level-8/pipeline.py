@@ -1,67 +1,63 @@
 import importlib
 import yaml
-from collections import defaultdict, deque
-from typing import Dict, List, Iterator, Tuple, Callable, Any
+from typing import Dict, List, Iterator, Tuple
 from processor_types import ProcessorFn
-
 
 def load_processor(path: str) -> ProcessorFn:
     """
     Dynamically import and return a processor function specified by a dotted import path.
 
     Args:
-        path (str): Dotted path to the processor function (e.g. "processors.upper.upper").
+        path: Dotted path to the processor function (e.g. "processors.upper.upper").
 
     Returns:
-        ProcessorFn: The imported processor callable.
+        The imported processor callable.
     """
     module_path, func_name = path.rsplit(".", 1)
     module = importlib.import_module(module_path)
-    func: ProcessorFn = getattr(module, func_name)
+    func = getattr(module, func_name)
     return func
-
 
 class PipelineNode:
     """
     Represents a node in the DAG pipeline with a processor and downstream routing.
     """
 
-    def __init__(self, name: str, processor: ProcessorFn) -> None:
+    def __init__(self, name: str, processor: ProcessorFn):
         """
         Initialize a pipeline node.
 
         Args:
-            name (str): Unique name of the node.
-            processor (ProcessorFn): Processor function that processes input lines.
+            name: Unique name of the node.
+            processor: Processor function that processes input lines.
         """
-        self.name: str = name
-        self.processor: ProcessorFn = processor
-        self.downstreams: Dict[str, List["PipelineNode"]] = {}
+        self.name = name
+        self.processor = processor
+        self.downstreams = {}
 
-    def add_downstream(self, tag: str, node: "PipelineNode") -> None:
+    def add_downstream(self, tag: str, node: "PipelineNode"):
         """
         Add a downstream node for a specific routing tag.
 
         Args:
-            tag (str): Output tag emitted by this node's processor.
-            node (PipelineNode): Downstream node receiving lines tagged with `tag`.
+            tag: Output tag emitted by this node's processor.
+            node: Downstream PipelineNode receiving lines tagged with `tag`.
         """
         if tag not in self.downstreams:
             self.downstreams[tag] = []
         self.downstreams[tag].append(node)
 
-
 class Pipeline:
     """
-    Represents the full DAG pipeline, loading configuration, constructing nodes, and executing the DAG.
+    Represents the full DAG pipeline, loading configuration, constructing nodes, and running the pipeline.
     """
 
-    def __init__(self, config_path: str) -> None:
+    def __init__(self, config_path: str):
         """
-        Load and build a DAG pipeline from a YAML configuration.
+        Load and build pipeline from YAML configuration.
 
         Args:
-            config_path (str): Path to pipeline YAML config file.
+            config_path: Path to pipeline YAML config file.
         """
         self.nodes: Dict[str, PipelineNode] = {}
         self.entry_points: List[PipelineNode] = []
@@ -71,15 +67,14 @@ class Pipeline:
 
         self._build_from_config(config)
 
-    def _build_from_config(self, config: Dict[str, Any]) -> None:
+    def _build_from_config(self, config):
         """
-        Construct pipeline nodes and their routing from a parsed configuration dictionary.
+        Construct pipeline nodes and routing from config dictionary.
 
         Args:
-            config (Dict[str, Any]): Parsed YAML configuration dictionary.
+            config: Parsed YAML config dictionary.
         """
-        nodes_config: Dict[str, Dict[str, Any]] = config["nodes"]
-
+        nodes_config = config["nodes"]
         for node_name, node_info in nodes_config.items():
             proc = load_processor(node_info["type"])
             node = PipelineNode(node_name, proc)
@@ -87,7 +82,7 @@ class Pipeline:
 
         for node_name, node_info in nodes_config.items():
             node = self.nodes[node_name]
-            routing: Dict[str, Any] = node_info.get("routes", {})
+            routing = node_info.get("routes", {})
             for tag, downstream_names in routing.items():
                 if isinstance(downstream_names, str):
                     downstream_names = [downstream_names]
@@ -98,7 +93,6 @@ class Pipeline:
         for node in self.nodes.values():
             for downstreams in node.downstreams.values():
                 all_downstream_nodes.update(downstreams)
-
         self.entry_points = [node for node in self.nodes.values() if node not in all_downstream_nodes]
 
     def run(self, input_lines: Iterator[str]) -> Iterator[str]:
@@ -106,16 +100,18 @@ class Pipeline:
         Run the DAG pipeline on input lines, routing outputs according to tags.
 
         Args:
-            input_lines (Iterator[str]): Iterator of raw input lines to process.
+            input_lines: Iterator of raw input lines to process.
 
         Yields:
-            Iterator[str]: Final processed output lines that have no downstream nodes.
+            Final processed output lines that have no downstream nodes.
         """
-        inputs_map: Dict[str, deque[str]] = defaultdict(deque)
+        from collections import deque, defaultdict
+
+        inputs_map = defaultdict(deque)
         for entry in self.entry_points:
             inputs_map[entry.name].extend(input_lines)
 
-        output_lines: List[str] = []
+        output_lines = []
 
         while True:
             progress = False
@@ -124,11 +120,11 @@ class Pipeline:
                 if not input_queue:
                     continue
 
-                def input_gen() -> Iterator[str]:
+                def input_gen():
                     while input_queue:
                         yield input_queue.popleft()
 
-                output_stream: Iterator[Tuple[str, str]] = node.processor(input_gen())
+                output_stream = node.processor(input_gen())
 
                 for tag, line in output_stream:
                     if tag in node.downstreams:

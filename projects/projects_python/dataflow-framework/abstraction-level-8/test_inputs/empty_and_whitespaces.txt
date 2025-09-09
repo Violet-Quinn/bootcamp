@@ -1,9 +1,0 @@
-
-
-  
-Error: Null pointer exception
- 
-Warning: Deprecated API usage
-
-
-General log entry   

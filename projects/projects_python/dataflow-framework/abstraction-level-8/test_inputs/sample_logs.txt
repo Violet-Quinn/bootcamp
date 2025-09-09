@@ -1,7 +1,0 @@
-System started successfully
-User login warning: invalid password attempt
-Could not find config file, error on startup
-Processing completed without errors
-Warning: Disk space low
-Unexpected error while saving file
-User logout

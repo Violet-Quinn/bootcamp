@@ -1,9 +1,11 @@
 def only_error(lines):
-    """Processes only error lines."""
-    for line in lines:
-        yield ("end", f"[ERROR] {line}")
+    prefix = "[ERROR]"
+    for tag, line in lines:
+        if "error" in line.lower():
+            yield ("end", f"{prefix} {line}")
 
 def only_warn(lines):
-    """Processes only warning lines."""
-    for line in lines:
-        yield ("end", f"[WARN] {line}")
+    prefix = "[WARN]"
+    for tag, line in lines:
+        if "warn" in line.lower():
+            yield ("end", f"{prefix} {line}")
