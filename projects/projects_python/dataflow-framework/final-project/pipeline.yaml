@@ -1,13 +1,25 @@
 nodes:
   - tag: start
     type: processors.start.tag_lines
+    routes:
+      error: [error]
+      warn: [warn]
+      general: [general]
+
   - tag: error
     type: processors.filters.only_error
+    routes:
+      end: end
+
   - tag: warn
     type: processors.filters.only_warn
+    routes:
+      end: end
+
   - tag: general
-    type: processors.snake.snake
-  - tag: snake
-    type: processors.output.terminal   # Optional: if you want to chain snake->output explicitly
+    type: processors.formatters.snake
+    routes:
+      end: end
+
   - tag: end
     type: processors.output.terminal

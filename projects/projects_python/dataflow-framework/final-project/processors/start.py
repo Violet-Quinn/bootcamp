@@ -1,12 +1,12 @@
 def tag_lines(lines):
-    """
-    Start processor: classify inputs into error / warn / general.
-    """
     for line in lines:
-        text = line.strip()
-        if "error" in text.lower():
-            yield ("error", text)
-        elif "warn" in text.lower():
-            yield ("warn", text)
+        _tag, content = line if isinstance(line, tuple) else ("", line)
+        content_lower = content.lower()
+        if "error" in content_lower:
+            tag = "error"
+        elif "warn" in content_lower:
+            tag = "warn"
         else:
-            yield ("general", text)
+            tag = "general"
+        print(f"Tagging line: '{content}' as '{tag}'")  # Debug log
+        yield (tag, content)

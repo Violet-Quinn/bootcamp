@@ -1,58 +1,67 @@
-#!/usr/bin/env bash
-
-
-# Functions
-function help() {
-  echo "Usage: ./run.sh [command]"
-  echo "Commands:"
-  echo "  install       Install Python dependencies"
-  echo "  build-docker  Build Docker image named dataflow-pipeline"
-  echo "  run           Run the project locally with folder monitor and dashboard"
-  echo "  clean         Remove Python .pyc files and __pycache__ folders"
-  echo "  help          Show this help message"
-}
-
-function install() {
-  echo "Installing Python dependencies..."
-  pip install -r requirements.txt
-}
+#!/bin/bash
+# This script simplifies common project commands for building, running,
+# packaging, and cleaning your Level 8 -> Final file processor project.
+# Usage:
+# ./run.sh build-docker       # Build Docker image for containerized deployment
+# ./run.sh run                # Run in watch mode: monitors folder continuously
+# ./run.sh run-single file    # Run single file processing mode and exit
+# ./run.sh build-package      # Build Python package (wheel/sdist) using uv
+# ./run.sh clean              # Remove build artifacts and Python caches
+set -e  # Exit immediately if a command exits with a non-zero status
+COMMAND=$1  # First argument: command name
+ARG=$2      # Second argument: optional command argument
 
 function build_docker() {
-  echo "Building Docker image..."
-  docker build -t dataflow-pipeline .
+    echo "Building Docker image..."
+    docker build -t dataflow-framework:latest .
+    echo "Docker image built successfully."
 }
 
-function run_project() {
-  echo "Starting folder monitor with observability dashboard..."
-  python3 main.py --watch-dir watch_dir --trace
+function run_watch() {
+    echo "Starting application in watch mode (folder monitoring)..."
+    python3 main.py --watch
 }
 
-function clean() {
-  echo "Cleaning up __pycache__ and .pyc files..."
-  find . -type f -name "*.pyc" -delete
-  find . -type d -name "__pycache__" -exec rm -rf {} +
+function run_single() {
+    if [ -z "$ARG" ]; then
+        echo "Error: Please provide an input file for single file mode."
+        exit 1
+    fi
+    echo "Processing single input file: $ARG"
+    python3 main.py --input "$ARG"
 }
 
-# Main
-if [ $# -eq 0 ]; then
-  help
-  exit 1
-fi
+function build_package() {
+    echo "Building Python package using uv..."
+    uv build
+    echo "Package built successfully in dist/"
+}
 
-case "$1" in
-  install)
-    install
-    ;;
-  build-docker)
-    build_docker
-    ;;
-  run)
-    run_project
-    ;;
-  clean)
-    clean
-    ;;
-  help|*)
-    help
-    ;;
+function clean_project() {
+    echo "Cleaning project build artifacts and caches..."
+    rm -rf dist/ build/ *.egg-info __pycache__ .pytest_cache
+    echo "Clean complete."
+}
+
+# Main driver
+case "$COMMAND" in
+    build-docker)
+        build_docker
+        ;;
+    run)
+        run_watch
+        ;;
+    run-single)
+        run_single
+        ;;
+    build-package)
+        build_package
+        ;;
+    clean)
+        clean_project
+        ;;
+    *)
+        echo "Usage: $0 {build-docker|run|run-single|build-package|clean}"
+        exit 1
+        ;;
 esac

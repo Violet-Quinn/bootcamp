@@ -1,0 +1,4 @@
+All is well.
+Warning detected in subsystem.
+Unexpected error happened here.
+General log entry.

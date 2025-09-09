@@ -1,0 +1,5 @@
+This is a general line.
+This line contains an error.
+Warning! This line has a warning.
+Another general line.
+Error occurred in processing.

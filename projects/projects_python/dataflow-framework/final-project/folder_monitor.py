@@ -1,125 +1,85 @@
 import os
+import shutil
+import threading
 import time
-from typing import Optional, List
-from threading import Lock
-
+from typing import Optional
 from state_engine import StateEngine
-from observability.shared_state import SharedState
-from utils import atomic_move, timestamp_now
-
 
 class FolderMonitor:
-    """
-    Monitors watch_dir/unprocessed for new files, moves files through states,
-    processes them via a state machine pipeline, writes output to processed/,
-    and updates shared observability state.
-    """
-
-    def __init__(self, watch_dir: str, shared_state: SharedState, trace_enabled: bool = False):
-        self.watch_dir = os.path.abspath(watch_dir)
-        self.unprocessed_dir = os.path.join(self.watch_dir, "unprocessed")
-        self.underprocess_dir = os.path.join(self.watch_dir, "underprocess")
-        self.processed_dir = os.path.join(self.watch_dir, "processed")
-
-        for d in (self.unprocessed_dir, self.underprocess_dir, self.processed_dir):
-            os.makedirs(d, exist_ok=True)
-
-        self.shared_state = shared_state
-        self.trace_enabled = trace_enabled
-
-        self.current_file_lock = Lock()
+    def __init__(self, watch_dir: str, state_engine: StateEngine, poll_interval: float = 1.0):
+        self.watch_dir = watch_dir
+        self.unprocessed_dir = os.path.join(watch_dir, "unprocessed")
+        self.underprocess_dir = os.path.join(watch_dir, "underprocess")
+        self.processed_dir = os.path.join(watch_dir, "processed")
+        self.state_engine = state_engine
+        self.poll_interval = poll_interval
         self.current_file: Optional[str] = None
-        self.processed_files: List[dict] = []
+        self.current_file_lock = threading.Lock()
+        self._setup_dirs()
+        self._recover_inprogress_files()
 
-        self.state_engine = StateEngine("pipeline_state.yaml", shared_state, trace_enabled)
+    def _setup_dirs(self):
+        os.makedirs(self.unprocessed_dir, exist_ok=True)
+        os.makedirs(self.underprocess_dir, exist_ok=True)
+        os.makedirs(self.processed_dir, exist_ok=True)
 
-        self._recover_incomplete_files()
-
-    def _recover_incomplete_files(self) -> None:
-        for filename in os.listdir(self.underprocess_dir):
+    def _recover_inprogress_files(self):
+        files = os.listdir(self.underprocess_dir)
+        for f in files:
+            src = os.path.join(self.underprocess_dir, f)
+            dst = os.path.join(self.unprocessed_dir, f)
             try:
-                src = os.path.join(self.underprocess_dir, filename)
-                dst = os.path.join(self.unprocessed_dir, filename)
-                atomic_move(src, dst)
-            except Exception as e:
-                print(f"[Recovery] Failed to move {src} to {dst}: {e}")
+                shutil.move(src, dst)
+            except Exception:
+                pass  # Ignore errors here
 
-    def _update_folder_metrics(self) -> None:
-        counts = {
-            "unprocessed": len(os.listdir(self.unprocessed_dir)),
-            "underprocess": len(os.listdir(self.underprocess_dir)),
-            "processed": len(os.listdir(self.processed_dir)),
-        }
-        self.shared_state.set_folder_counts(counts)
-
-    def _set_current_file(self, filename: Optional[str]) -> None:
+    def _update_metrics(self):
+        with self.state_engine.metrics_lock:
+            self.state_engine.metrics["folder_monitor"] = {
+                "unprocessed": len(os.listdir(self.unprocessed_dir)),
+                "underprocess": len(os.listdir(self.underprocess_dir)),
+                "processed": len(os.listdir(self.processed_dir)),
+            }
         with self.current_file_lock:
-            self.current_file = filename
-            self.shared_state.set_current_file(filename)
+            self.state_engine.current_processing_file = self.current_file
 
-    def _append_processed_file(self, filename: str) -> None:
-        entry = {"filename": filename, "timestamp": timestamp_now()}
-        self.processed_files.append(entry)
-        if len(self.processed_files) > 100:
-            self.processed_files.pop(0)
-        self.shared_state.set_processed_file_history(self.processed_files)
+    def _process_file(self, filepath: str):
+        # Read file, process via state engine, overwrite the file with transformed output
+        with open(filepath, "r") as f:
+            input_lines = [line.strip() for line in f if line.strip()]
+        output_lines = self.state_engine.run(input_lines)
+        with open(filepath, "w") as f:
+            for line in output_lines:
+                f.write(line + "\n")
 
-    def _process_file(self, filepath: str) -> List[str]:
-        self._set_current_file(os.path.basename(filepath))
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                input_lines = [line.strip() for line in f if line.strip()]
-
-            outputs = list(self.state_engine.run(input_lines))
-            return outputs
-        finally:
-            self._set_current_file(None)
-
-    def run_forever(self, poll_interval: float = 1.0) -> None:
-        self._update_folder_metrics()
+    def run(self):
         while True:
             try:
-                self._update_folder_metrics()
+                self._update_metrics()
                 files = sorted(os.listdir(self.unprocessed_dir))
                 if not files:
-                    time.sleep(poll_interval)
+                    time.sleep(self.poll_interval)
                     continue
-
                 for filename in files:
                     src_path = os.path.join(self.unprocessed_dir, filename)
-                    underprocess_path = os.path.join(self.underprocess_dir, filename)
-                    processed_path = os.path.join(self.processed_dir, filename)
-
+                    processing_path = os.path.join(self.underprocess_dir, filename)
+                    shutil.move(src_path, processing_path)
+                    with self.current_file_lock:
+                        self.current_file = filename
+                    self._update_metrics()
                     try:
-                        atomic_move(src_path, underprocess_path)
-                        self._update_folder_metrics()
-
-                        outputs = self._process_file(underprocess_path)
-
-                        # Write processed output back to the processed directory file
-                        with open(processed_path, "w", encoding="utf-8") as out_f:
-                            for line in outputs:
-                                out_f.write(line + "\n")
-
-                        # Remove original underprocess file as processed output saved
-                        if os.path.exists(underprocess_path):
-                            os.remove(underprocess_path)
-
-                        self._append_processed_file(filename)
-                        self._update_folder_metrics()
-
+                        self._process_file(processing_path)
                     except Exception as e:
-                        print(f"[Error] Processing file {filename} failed: {e}")
-
-                        # Attempt to move file back to unprocessed for retry
-                        try:
-                            if os.path.exists(underprocess_path):
-                                atomic_move(underprocess_path, src_path)
-                        except Exception as inner_e:
-                            print(f"[Error] Failed to recover file {filename}: {inner_e}")
-
-                time.sleep(poll_interval)
-
+                        with self.state_engine.errors_lock:
+                            self.state_engine.errors.append(("folder_monitor", f"Error processing {filename}: {e}"))
+                    finally:
+                        # Move transformed file to processed folder
+                        final_path = os.path.join(self.processed_dir, filename)
+                        shutil.move(processing_path, final_path)
+                        with self.current_file_lock:
+                            self.current_file = None
+                    self._update_metrics()
             except Exception as e:
-                print(f"[Error] Folder monitor unexpected error: {e}")
-                time.sleep(poll_interval)
+                with self.state_engine.errors_lock:
+                    self.state_engine.errors.append(("folder_monitor", f"General monitor error: {e}"))
+                time.sleep(self.poll_interval)

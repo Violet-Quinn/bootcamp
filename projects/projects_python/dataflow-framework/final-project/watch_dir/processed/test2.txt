@@ -1,0 +1,4 @@
+all_is_well
+[WARN] Warning detected in subsystem.
+[ERROR] Unexpected error happened here.
+general_log_entry

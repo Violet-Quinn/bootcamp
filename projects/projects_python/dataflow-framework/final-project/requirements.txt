@@ -1,4 +1,8 @@
-typer
-fastapi
-uvicorn[standard]
-pyyaml
+fastapi>=0.95.2
+uvicorn>=0.22.0
+typer>=0.9.0
+pydantic>=1.10.7
+PyYAML>=6.0
+networkx>=3.1
+matplotlib>=3.7.1
+uv>=0.1.0  # Replace this with exact uv package name if different

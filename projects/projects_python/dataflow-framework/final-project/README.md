@@ -24,137 +24,83 @@ Let the user choose mode via `--watch` or `--input`.
 ___
 
 ## Solution
-Final Project Directory Structure and Roles:
-final-project/
-├── main.py                          # CLI entry point, starts folder monitor and dashboard
-├── core.py
-├── pipeline.py
-├── requirements.txt
-├── folder_monitor.py                # Core file watcher: monitors folders, manages file lifecycle, processes files, writes output
-├── state_engine.py                 # Stateful tag-based routing engine for line processing pipeline (reused from Level 7)
-├── processor_types.py              # Processor function type definitions (callable signature) (reused)
-├── observability/
-│   ├── shared_state.py             # Thread-safe shared metrics, errors, traces, and folder queue stats
-│   ├── instrumentation.py          # Wrapping processors for metrics, tracing, error collection
-│   ├── dashboard.py                # FastAPI dashboard server exposing metrics, traces, errors, plus folder queue endpoints
-├── watch_dir/
-│   ├── unprocessed/
-│   ├── underprocess/
-│   ├── processed/
-├── test_inputs/
-├── processors/                     # Pure text-line processor functions (transforms only; one output line per input)
-│   ├── filters.py                  # Filter processors like only_error, only_warn
-│   ├── join_pairs.py               # Stateful processor joining line pairs
-│   ├── line_count.py               # Stateful processor counting lines
-│   ├── output.py                   # Final output processor that prints lines (used for "end")
-│   ├── snake.py                   # Snake case formatter (replaces formatters.py)
-│   ├── start.py                   # Start node processor: tags lines (error, warn, general)
-│   ├── upper.py                   # Uppercase processing (optional)
-├── pipeline_state.yaml             # YAML config defining nodes (tags) and their processor functions
-├── utils.py                       # Utility functions like atomic file moves, timestamp helpers
-└── test_input.txt                  # Example input file for testing the pipeline
-└── dockerfile
+Key Files and Their Roles
+1. main.py
+* Entry point of the system and CLI interface.
+* Supports dual execution modes:
+    * Single File Mode: Processes one specified file and exits.
+    * Watch Mode: Monitors a folder for new files continuously.
+* Initializes the StateEngine that manages processing pipelines, routing, and metrics.
+* Starts the FolderMonitor in watch mode on a background thread.
+* Starts the FastAPI dashboard server exposing REST APIs and frontend UI.
+* Uses typer to parse CLI commands and options.
+2. folder_monitor.py
+* Watches a configured directory structure:
+    * unprocessed/ for incoming files,
+    * underprocess/ for files being processed,
+    * processed/ for completed files.
+* Moves files through these folders as it processes them.
+* For each file, reads lines and calls StateEngine to process data.
+* Updates metrics and collects errors/traces.
+* Enables fault-tolerant, real-time file ingestion.
+3. state_engine.py
+* Contains the core processing pipeline logic.
+* Loads pipeline configuration from YAML (pipeline.yaml).
+* Manages a graph of processing nodes and routing steps.
+* Processes input lines by passing through various processors.
+* Records metrics (counts, times, errors), event traces, and error logs.
+* Thread-safe for concurrent access by monitor and dashboard.
+4. dashboard.py
+* Defines FastAPI endpoints to provide observability data:
+    * /api/stats - processor metrics summary.
+    * /api/trace - recent line traces through pipeline.
+    * /api/errors - recent errors.
+* Serves the frontend UI (HTML+JS) displaying metrics, traces, errors.
+* Provides auto-refreshing, real-time dashboard visualization.
+* Uses CORS middleware for flexible access.
+5. Frontend (static/index.html + CSS/JS)
+* Browser-side dashboard UI.
+* Fetches JSON data from FastAPI APIs every 5 seconds.
+* Displays metrics as cards, recent trace lines in tables, and error logs.
+* Provides simple, intuitive real-time observability for users.
+6. run.sh
+* Shell script wrapping common commands:
+    * Build and run Docker container.
+    * Run app in watch or single file mode.
+    * Build Python package.
+    * Clean build artifacts.
+* Simplifies running and deployment for developers and CI/CD.
+7. Dockerfile
+* Containerizes application with Python 3.12 slim image.
+* Installs dependencies from requirements.txt via pip.
+* Copies application code.
+* Defines default command to run FastAPI app with Uvicorn in watch mode.
+* Enables consistent environment for deployment.
 
-How It Works:
-1. Startup
-    - main.py is started from the command line, with options to specify the --watch-dir and enable tracing/dashboard.
-    - It creates a shared observability state instance (SharedState) used to collect runtime metrics, traces, errors, and folder queue stats.
-    - It launches the FastAPI dashboard (on separate thread) for live monitoring.
-    - It creates and runs an instance of FolderMonitor, passing it the shared state and trace flag.
-2. Folder Monitor Initialization
-    - The FolderMonitor class initializes by creating a directory structure under the given watch_dir:
-        - unprocessed/: for new files awaiting processing.
-        - underprocess/: for files currently being processed.
-        - processed/: for files successfully processed.
-    - On startup, the monitor runs _recover_incomplete_files() to move any files left in underprocess back to unprocessed so they can be retried—providing fault tolerance and recovery from crashes.
-3. File Monitoring Loop
-    - The monitor runs indefinitely (run_forever()).
-    - It polls unprocessed/ folder regularly (e.g., every second).
-    - When it detects files, it atomically moves each file from unprocessed/ to underprocess/ to claim ownership for processing.
-    - It updates observability state with current folder counts and current file processing info.
-4. File Processing
-    - The monitor reads all lines from the file (skipping blank lines).
-    - It calls the StateEngine.run(lines) method, which drives the state-machine pipeline using the YAML-configured processors.
-    - The state engine routes lines between processors based on tags, handles branching/fan-out, and collects observability data (metrics, tracing).
-    - Processors in the processors/ folder perform line transformations (e.g., tagging, filtering, formatting).
-    - The final output lines are collected after the pipeline run.
-5. Saving Processed Files
-    - After processing, the monitor writes the output lines back as a new file with the same filename into processed/, overwriting or replacing the old content.
-    - The patrol removes the old file from underprocess/.
-    - It updates the processed file history with timestamps in shared observability state.
-6. Observability
-    - Metrics, traces, error logs are recorded per processor and overall.
-    - Folder counts (unprocessed, underprocess, processed), the current file being processed, and recent processed file history are also stored in shared state.
-    - The FastAPI dashboard at http://localhost:8000 exposes REST API endpoints to view real-time metrics and file queue states.
-7. Fault Tolerance
-    - If the system crashes or is killed during processing:
-        - On restart, the folder monitor moves any files left in underprocess back to unprocessed.
-        - This guarantees idempotent retry and no stuck files.
-    - File atomic moves and locking ensure no partial or concurrent processing occurs.
-    - The infinite loop recovers from transient errors and keeps running indefinitely.
-
+Flow of Execution
+1. Start Application:
+* Run via CLI or run.sh in watch or single file mode.
+2. Single File Mode:
+* Reads the specified input file.
+* Passes lines to StateEngine.run() for processing.
+* Writes processed output to a file.
+* Exits.
+3. Watch Mode:
+* FolderMonitor continuously polls unprocessed/ folder.
+* Moves new files into underprocess/ and processes them line-by-line.
+* Updates StateEngine metrics, traces, and errors in memory.
+4. Dashboard Server:
+* FastAPI serves REST APIs exposing processing stats.
+* Serves frontend dashboard URL /.
+* Frontend polls backend APIs for live state.
+* Visualizes pipeline observability and errors in real time.
+5. Containerization:
+* Docker builds reproducible environment with dependencies.
+* Runs the app inside container exposing port 8000.
 
 Run:
-`python3 main.py --watch-dir watch_dir --trace`
+Give execute permissions:
+`chmod +x run.sh`
 
-Usage:
-Make it executable once:
-```bash
-chmod +x run.sh
-```
-
-Using the run.sh Script for Common Project Operations:
-To streamline development and deployment, the project includes a `run.sh` shell script that simplifies common tasks and improves usability. Instead of running long or complex commands manually, simply execute predefined commands with `./run.sh`.
-
-Provided Commands:
-- install
-Installs all required Python dependencies listed in requirements.txt.
-Use:
-```bash
-./run.sh install
-```
-
-- build-docker
-Builds a Docker image tagged dataflow-pipeline for containerized runs, packaging your entire app and dependencies.
-Use:
-```bash
-./run.sh build-docker
-```
-
-- run
-Starts the folder monitoring service with the observability dashboard enabled (default watch folder is watch_dir). This runs the core Level 8 pipeline in continuous mode.
-Use:
-```bash
-./run.sh run
-```
-
-- clean
-Cleans up compiled Python bytecode files (*.pyc) and __pycache__ directories to keep the repository tidy.
-Use:
-```bash
-./run.sh clean
-```
-
-- help
-Displays usage information about the available commands.
-
-
-How to use:
-Make the script executable (once):
-```bash
-chmod +x run.sh
-```
-
-Run any command, for example:
-```bash
-./run.sh install
-./run.sh build-docker
-./run.sh run
-./run.sh clean
-```
-
-To run single file mode at container start, override the CMD:
-```bash
-docker run -it --rm -v /Users/yourname/data:/app dataflow-pipeline python3 main.py run --input /app/testfile.txt
-
-```
+Run using:
+`bash run.sh [option]`

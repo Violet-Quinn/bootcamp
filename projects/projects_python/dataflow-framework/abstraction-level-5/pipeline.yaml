@@ -3,7 +3,7 @@ nodes:
     processor: processors.join_two_lines.JoinEveryTwoLines
   - name: tagger
     processor: processors.tag_error.TagError
-  - name: error_counter
+  - name: line_counter
     processor: processors.line_counter.LineCounter
   - name: snake_formatter
     processor: processors.snake.to_snakecase
@@ -16,7 +16,7 @@ routes:
     to: [tagger]
   - from: tagger
     tag: error
-    to: [error_counter]
+    to: [line_counter]
   - from: tagger
     tag: general
     to: [snake_formatter]
@@ -26,6 +26,6 @@ routes:
   - from: upper_formatter
     tag: default
     to: []
-  - from: error_counter
+  - from: line_counter
     tag: default
     to: []
